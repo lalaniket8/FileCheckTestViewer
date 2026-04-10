@@ -402,8 +402,8 @@ del.d2h-change, ins.d2h-change,
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  width: 440px;
-  max-width: 90vw;
+  width: min(720px, 94vw);
+  max-width: 94vw;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
   overflow: hidden;
 }
