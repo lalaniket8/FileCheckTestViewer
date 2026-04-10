@@ -29,8 +29,9 @@
 
     <!-- Toolbar -->
     <div id="toolbar">
-      <button id="btn-info" title="About LitDiff" aria-label="About LitDiff">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1 0-1.5h.25V8.5h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
+      <button id="btn-info" type="button" title="About LitDiff" aria-label="About LitDiff">
+        <svg class="btn-info-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1 0-1.5h.25V8.5h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
+        <span class="btn-info-label">About</span>
       </button>
       <div class="toolbar-separator"></div>
       <label for="pr-url">PR:</label>
@@ -55,20 +56,26 @@
       <div id="about-modal">
         <div class="modal-header">
           <span class="modal-title">About LitDiff</span>
-          <button id="about-close" aria-label="Close">&times;</button>
+          <div class="modal-header-actions">
+            <a id="about-github" class="modal-github-link" href="https://github.com/lalaniket8/LitDiff" target="_blank" rel="noopener noreferrer" title="Source on GitHub" aria-label="View LitDiff on GitHub">
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            </a>
+            <button id="about-close" type="button" aria-label="Close">&times;</button>
+          </div>
         </div>
         <div class="modal-body">
-          <p>Browser diff viewer for <a href="https://llvm.org/docs/CommandGuide/FileCheck.html" target="_blank" rel="noopener">LLVM FileCheck</a> check lines in GitHub PRs. Strips FileCheck pattern noise (<code>[[VAR:%[0-9]+]]</code> &rarr; <code>VAR</code>) from <code>.mir</code>/<code>.ll</code> files before diffing. No backend &mdash; runs entirely in the browser.</p>
+          <p>Browser diff viewer for <a href="https://llvm.org/docs/CommandGuide/FileCheck.html" target="_blank" rel="noopener noreferrer">LLVM FileCheck</a> check lines in GitHub PRs.</p>
+          <p>Strips FileCheck pattern noise (<code>[[VAR:%[0-9]+]]</code> &rarr; <code>VAR</code>) from <code>.mir</code> and <code>.ll</code> files before diffing. No backend: everything runs in your browser.</p>
           <h4>Features</h4>
           <ul>
-            <li>FileCheck normalization (<code>[[NAME:%[0-9]+]]</code> &rarr; <code>NAME</code>, <code>[[NAME]]</code> &rarr; <code>NAME</code>)</li>
-            <li>GitHub-like UI/UX</li>
-            <li>Multiple code-wide text highlights (right-click &rarr; Add highlight / Unhighlight clears all) to help follow variables</li>
+            <li>FileCheck normalization: <code>[[NAME:%[0-9]+]]</code> &rarr; <code>NAME</code>, <code>[[NAME]]</code> &rarr; <code>NAME</code></li>
+            <li>GitHub-like UI and diff layout</li>
+            <li>Multiple code-wide highlights (right-click &rarr; Add highlight; Unhighlight clears all) to follow variables</li>
           </ul>
           <p class="modal-warning">&#9888; By default <code>GH_AUTH_TOKEN</code> is saved to browser <code>localStorage</code>, which persists across sessions and has no expiry. Anyone with access to the browser profile or developer tools can read it.</p>
           <h4>Usage</h4>
-          <p>Open <code>index.html</code>, enter a PR number (defaults to <code>ROCm/llvm-project</code>) or full PR URL, click <strong>Load</strong>.</p>
-          <p><strong>TOKEN</strong> &mdash; gh auth token, optional read-only PAT (<code>public_repo</code>) for higher API rate limits, stored in <code>localStorage</code>.</p>
+          <p>Open <code>index.html</code>, enter a PR number (defaults to <code>ROCm/llvm-project</code>) or a full PR URL, then click <strong>Load</strong>.</p>
+          <p><strong>Token</strong> &mdash; optional GitHub token (read-only PAT with <code>public_repo</code> for higher API rate limits). Stored in <code>localStorage</code>.</p>
         </div>
       </div>
     </div>
