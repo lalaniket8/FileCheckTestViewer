@@ -41,7 +41,7 @@
     contentCache: {},
     owner: "", repo: "", prNumber: 0,
     contextSize: 3,
-    trackedText: "",
+    highlightedTexts: [],
   };
 
   // ── Global error handler for uncaught promise rejections ──
@@ -135,15 +135,14 @@
             .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  function parsePrUrl(url) {
-    const m = url.trim().match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+  function parseInput(raw) {
+    const s = (raw || "").trim();
+    if (/^\d+$/.test(s)) {
+      const [owner, repo] = DEFAULT_REPO.split("/");
+      return { owner, repo, prNumber: +s };
+    }
+    const m = s.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
     return m ? { owner: m[1], repo: m[2], prNumber: +m[3] } : null;
-  }
-
-  // Accepts bare PR number (resolves to DEFAULT_REPO) or full URL
-  function resolveInput(raw) {
-    const s = String(raw || "");
-    return /^\d+$/.test(s) ? `https://github.com/${DEFAULT_REPO}/pull/${s}` : s;
   }
 
   function showError(msg) {
@@ -255,7 +254,7 @@
     elDiffPane.classList.toggle("sbs-mode", isSbs);
     if (isSbs) injectCodePanelSplitter();
     postProcessHunkHeaders();
-    applyTrackHighlights();
+    applyHighlights();
   }
 
   // Adds a draggable splitter between left/right code panels in SBS mode
@@ -355,7 +354,7 @@
 
     const { base, head } = currentRefs();
     const key = cacheKey(base, head, filename);
-    if (state.contentCache[key]) { renderCurrentFile(); maybeShowTrackHint(); return; }
+    if (state.contentCache[key]) { renderCurrentFile(); maybeShowHighlightHint(); return; }
 
     elDiffPane.innerHTML = '<div id="diff-empty">Loading diff…</div>';
     setStatus("Fetching file contents…");
@@ -368,18 +367,18 @@
       state.contentCache[key] = { oldText: normalizeFileCheck(oldText), newText: normalizeFileCheck(newText) };
       if (state.selectedFile === filename) renderCurrentFile();
       setStatus("Ready");
-      maybeShowTrackHint();
+      maybeShowHighlightHint();
     } catch (err) {
       showError(err.message);
     }
   }
 
-  // ── One-time track feature hint (shown once after first file loads) ──
+  // ── One-time highlight feature hint (shown once after first file loads) ──
 
-  function maybeShowTrackHint() {
-    if (localStorage.getItem(HINT_KEY) || state.trackedText) return;
+  function maybeShowHighlightHint() {
+    if (localStorage.getItem(HINT_KEY) || state.highlightedTexts.length > 0) return;
     localStorage.setItem(HINT_KEY, "1");
-    setStatus("Tip: Select text and right-click to highlight it");
+    setStatus("Tip: Select text and right-click → Add highlight (multiple phrases supported)");
     setTimeout(() => {
       if (elStatus.textContent.startsWith("Tip:")) setStatus("Ready");
     }, 8000);
@@ -428,11 +427,9 @@
     const raw = elPrUrl.value.trim();
     if (!raw) return;
 
-    const url = resolveInput(raw);
-    elPrUrl.value = url;
-
-    const parsed = parsePrUrl(url);
+    const parsed = parseInput(raw);
     if (!parsed) { setStatus("Error: Invalid GitHub PR URL"); return; }
+    elPrUrl.value = `https://github.com/${parsed.owner}/${parsed.repo}/pull/${parsed.prNumber}`;
 
     Object.assign(state, {
       owner: parsed.owner, repo: parsed.repo, prNumber: parsed.prNumber,
@@ -484,12 +481,9 @@
     }
   }
 
-  // ── Track highlights (text search + <mark> injection) ──
+  // ── Diff highlights (text search + <mark> injection) ──
 
-  function applyTrackHighlights() {
-    if (!state.trackedText) return;
-    const needle = state.trackedText;
-
+  function injectHighlightNeedle(needle) {
     elDiffPane.querySelectorAll(".d2h-code-line-ctn").forEach((ctn) => {
       const walker = document.createTreeWalker(ctn, NodeFilter.SHOW_TEXT);
       const textNodes = [];
@@ -505,7 +499,7 @@
         while ((idx = text.indexOf(needle, pos)) !== -1) {
           if (idx > pos) frag.appendChild(document.createTextNode(text.slice(pos, idx)));
           const mark = document.createElement("mark");
-          mark.className = "track-highlight";
+          mark.className = "diff-highlight";
           mark.textContent = needle;
           frag.appendChild(mark);
           pos = idx + needle.length;
@@ -516,51 +510,60 @@
     });
   }
 
-  function clearTrackHighlights() {
-    elDiffPane.querySelectorAll(".track-highlight").forEach((mark) => {
+  function applyHighlights() {
+    clearHighlights();
+    if (!state.highlightedTexts.length) return;
+    const needles = dedupeHighlightOrder(state.highlightedTexts)
+      .slice()
+      .sort((a, b) => b.length - a.length);
+    for (const needle of needles) injectHighlightNeedle(needle);
+  }
+
+  function clearHighlights() {
+    elDiffPane.querySelectorAll(".diff-highlight").forEach((mark) => {
       const parent = mark.parentNode;
       mark.replaceWith(document.createTextNode(mark.textContent));
       parent.normalize();
     });
   }
 
-  // ── Track context menu (right-click to track/untrack selected text) ──
+  // ── Highlight context menu (right-click) ──
 
-  function setupTrackContextMenu() {
+  function setupHighlightContextMenu() {
     const menu = document.createElement("div");
-    menu.id = "track-context-menu";
+    menu.id = "highlight-context-menu";
 
-    const trackItem = document.createElement("div");
-    trackItem.className = "track-menu-item";
-    trackItem.innerHTML =
+    const addHighlightItem = document.createElement("div");
+    addHighlightItem.className = "highlight-menu-item";
+    addHighlightItem.innerHTML =
       '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.28 3.22a.75.75 0 0 1 0 1.06L4.56 11H7.25a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 2 11.75v-4.5a.75.75 0 0 1 1.5 0v2.69l6.72-6.72a.75.75 0 0 1 1.06 0ZM13.5 9.5a.75.75 0 0 0-1.5 0v2.75a.25.25 0 0 1-.25.25H9a.75.75 0 0 0 0 1.5h2.75A1.75 1.75 0 0 0 13.5 12.25V9.5Z"/></svg>' +
-      "Highlight";
+      "Add highlight";
 
-    const untrackItem = document.createElement("div");
-    untrackItem.className = "track-menu-item";
-    untrackItem.innerHTML =
+    const clearHighlightsItem = document.createElement("div");
+    clearHighlightsItem.className = "highlight-menu-item";
+    clearHighlightsItem.innerHTML =
       '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg>' +
       "Unhighlight";
 
-    menu.appendChild(trackItem);
-    menu.appendChild(untrackItem);
+    menu.appendChild(addHighlightItem);
+    menu.appendChild(clearHighlightsItem);
     document.body.appendChild(menu);
 
     function hideMenu() { menu.style.display = "none"; }
 
-    let pendingText = "";
+    let pendingHighlightText = "";
 
     elDiffPane.addEventListener("contextmenu", (e) => {
       const sel = window.getSelection().toString().trim();
       const hasSelection = sel.length > 0;
-      const hasTracked = state.trackedText.length > 0;
-      if (!hasSelection && !hasTracked) return;
+      const hasHighlights = state.highlightedTexts.length > 0;
+      if (!hasSelection && !hasHighlights) return;
 
       e.preventDefault();
-      pendingText = sel;
+      pendingHighlightText = sel;
 
-      trackItem.style.display = hasSelection ? "" : "none";
-      untrackItem.style.display = hasTracked ? "" : "none";
+      addHighlightItem.style.display = hasSelection ? "" : "none";
+      clearHighlightsItem.style.display = hasHighlights ? "" : "none";
 
       const x = Math.min(e.clientX, window.innerWidth - 160);
       const y = Math.min(e.clientY, window.innerHeight - 80);
@@ -569,21 +572,27 @@
       menu.style.display = "block";
     });
 
-    trackItem.addEventListener("click", () => {
+    addHighlightItem.addEventListener("click", () => {
       hideMenu();
-      if (!pendingText) return;
-      state.trackedText = pendingText;
-      clearTrackHighlights();
-      applyTrackHighlights();
-      const count = elDiffPane.querySelectorAll(".track-highlight").length;
-      setStatus(`Highlighting "${pendingText.length > 30 ? pendingText.slice(0, 27) + "…" : pendingText}" — ${count} occurrence(s)`);
+      if (!pendingHighlightText) return;
+      if (!state.highlightedTexts.includes(pendingHighlightText)) {
+        state.highlightedTexts.push(pendingHighlightText);
+      }
+      applyHighlights();
+      const phraseCount = dedupeHighlightOrder(state.highlightedTexts).length;
+      const occ = elDiffPane.querySelectorAll(".diff-highlight").length;
+      const preview =
+        pendingHighlightText.length > 30
+          ? pendingHighlightText.slice(0, 27) + "…"
+          : pendingHighlightText;
+      setStatus(`${phraseCount} phrase(s), ${occ} occurrence(s) — added "${preview}"`);
     });
 
-    untrackItem.addEventListener("click", () => {
+    clearHighlightsItem.addEventListener("click", () => {
       hideMenu();
-      state.trackedText = "";
-      clearTrackHighlights();
-      setStatus("Highlight cleared");
+      state.highlightedTexts = [];
+      clearHighlights();
+      setStatus("All highlights cleared");
     });
 
     document.addEventListener("click", (e) => {
@@ -628,5 +637,5 @@
   makeDraggable(elSplitter, (e) => {
     elSidebar.style.width = Math.max(100, Math.min(e.clientX, window.innerWidth - 200)) + "px";
   });
-  setupTrackContextMenu();
+  setupHighlightContextMenu();
 })();

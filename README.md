@@ -6,7 +6,7 @@ Browser diff viewer for [LLVM FileCheck](https://llvm.org/docs/CommandGuide/File
 
 - FileCheck normalization (`[[NAME:%[0-9]+]]` → `NAME`, `[[NAME]]` → `NAME`)
 - Github like UI/UX
-- Code-wide text highlighting (right-click → Highlight / Unhighlight) to help track variables
+- Multiple code-wide text highlights (right-click → Add highlight / Unhighlight clears all) to help follow variables
 
 > **Warning:** By default `GH_AUTH_TOKEN` is saved to browser `localStorage`, which persists across sessions and has no expiry. Anyone with access to the browser profile or developer tools can read it.
 
