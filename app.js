@@ -208,31 +208,16 @@
       return;
     }
 
-    const { base, head } = currentRefs();
-
     for (const filename of files) {
       const div = document.createElement("div");
       div.className = "file-item" + (filename === state.selectedFile ? " active" : "");
       div.title = filename;
 
-      const entry = state.contentCache[cacheKey(base, head, filename)];
-      const status = !entry ? "M" : !entry.oldText && entry.newText ? "A" : entry.oldText && !entry.newText ? "D" : "M";
-      const statusCls = status === "A" ? "added" : status === "D" ? "deleted" : "modified";
-
-      const statusSpan = document.createElement("span");
-      statusSpan.className = "file-status file-status-" + statusCls;
-      statusSpan.textContent = status;
-
-      const name     = filename.split("/").pop();
-      const dotIdx   = name.lastIndexOf(".");
-      const baseName = dotIdx > 0 ? name.slice(0, dotIdx) : name;
-      const ext      = dotIdx > 0 ? name.slice(dotIdx) : "";
-
+      const name = filename.split("/").pop();
       const nameSpan = document.createElement("span");
       nameSpan.className = "file-name-text";
-      nameSpan.innerHTML = escapeHtml(baseName) + '<span class="file-ext">' + escapeHtml(ext) + "</span>";
+      nameSpan.textContent = name;
 
-      div.appendChild(statusSpan);
       div.appendChild(nameSpan);
       div.addEventListener("click", () => selectFile(filename));
       elFileList.appendChild(div);
