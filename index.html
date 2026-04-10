@@ -25,13 +25,21 @@
     <link rel="stylesheet" href="style.css" />
     <script defer src="app.js"></script>
   </head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-07BKGSLNRC"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-07BKGSLNRC');
+  </script>
   <body>
 
     <!-- Toolbar -->
     <div id="toolbar">
       <button id="btn-info" type="button" title="About LitDiff" aria-label="About LitDiff">
-        <svg class="btn-info-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1 0-1.5h.25V8.5h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
-        <span class="btn-info-label">About</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1 0-1.5h.25V8.5h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
       </button>
       <div class="toolbar-separator"></div>
       <label for="pr-url">PR:</label>
@@ -72,6 +80,7 @@
             <li>GitHub-like UI and diff layout</li>
             <li>Multiple code-wide highlights (right-click &rarr; Add highlight; Unhighlight clears all) to follow variables</li>
           </ul>
+          <p class="modal-warning">&#9888; <strong>Warning:</strong> This site uses Google Analytics to understand usage patterns.</p>
           <p class="modal-warning">&#9888; By default <code>GH_AUTH_TOKEN</code> is saved to browser <code>localStorage</code>, which persists across sessions and has no expiry. Anyone with access to the browser profile or developer tools can read it.</p>
           <h4>Usage</h4>
           <p>Open <code>index.html</code>, enter a PR number (defaults to <code>ROCm/llvm-project</code>) or a full PR URL, then click <strong>Load</strong>.</p>

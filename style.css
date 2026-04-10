@@ -85,23 +85,20 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 5px 10px;
+  padding: 5px 7px;
   background: transparent;
   border: 1px solid transparent;
   color: var(--muted);
   flex-shrink: 0;
-  font-weight: 500;
   transition: color 0.15s, border-color 0.15s;
 }
-#btn-info .btn-info-icon { flex-shrink: 0; opacity: 0.92; }
-#btn-info .btn-info-label { line-height: 1; letter-spacing: 0.01em; }
+#btn-info svg { flex-shrink: 0; opacity: 0.92; }
 #btn-info:hover {
   color: var(--accent);
   background: transparent;
   border-color: transparent;
 }
-#btn-info:hover .btn-info-icon { opacity: 1; }
+#btn-info:hover svg { opacity: 1; }
 
 .toolbar-separator {
   width: 1px;

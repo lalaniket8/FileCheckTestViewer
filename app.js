@@ -416,6 +416,13 @@
     if (!parsed) { setStatus("Error: Invalid GitHub PR URL"); return; }
     elPrUrl.value = `https://github.com/${parsed.owner}/${parsed.repo}/pull/${parsed.prNumber}`;
 
+    if (typeof gtag === "function") {
+      gtag("event", "pr_loaded", {
+        event_category: "engagement",
+        event_label: "pr_load",
+      });
+    }
+
     Object.assign(state, {
       owner: parsed.owner, repo: parsed.repo, prNumber: parsed.prNumber,
       contentCache: {}, selectedCommit: "ALL", commitFiles: null,
