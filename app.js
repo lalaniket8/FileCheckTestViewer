@@ -20,6 +20,8 @@
   const elBtnInfo     = byId("btn-info");
   const elAboutOverlay = byId("about-overlay");
   const elAboutClose  = byId("about-close");
+  const elBtnSidebarCollapse = byId("btn-sidebar-collapse");
+  const elBtnSidebarExpand   = byId("btn-sidebar-expand");
 
   // ── Constants ───────────────────────────────────────────
   const ALLOWED_EXTENSIONS = [".mir", ".ll"];
@@ -29,7 +31,7 @@
   const CONTEXT_ALL   = Infinity;
   const CONTEXT_STEPS = [3, 10, 25, 75, CONTEXT_ALL];
 
-  // ── Application state (single mutable object) ──────────
+  // ── Application state ───────────────────────────────────
   const state = {
     baseRef: "", headRef: "",
     commits: [],
@@ -77,11 +79,11 @@
   }
 
   async function ghApiPaginated(path, maxPages = 30) {
-    let results = [];
+    const results = [];
     for (let page = 1; page <= maxPages; page++) {
       const sep = path.includes("?") ? "&" : "?";
       const data = await ghApi(path + sep + "per_page=100&page=" + page);
-      results = results.concat(data);
+      results.push(...data);
       if (data.length < 100) break;
     }
     return results;
@@ -130,11 +132,6 @@
 
   function repoSlug() { return state.owner + "/" + state.repo; }
 
-  function escapeHtml(s) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-
   function parseInput(raw) {
     const s = (raw || "").trim();
     if (/^\d+$/.test(s)) {
@@ -147,7 +144,11 @@
 
   function showError(msg) {
     setStatus("Error: " + msg);
-    elDiffPane.innerHTML = `<div id="diff-empty" style="color:#ffa198">${escapeHtml(msg)}</div>`;
+    const div = document.createElement("div");
+    div.id = "diff-empty";
+    div.style.color = "#ffa198";
+    div.textContent = msg;
+    elDiffPane.replaceChildren(div);
   }
 
   function showFirstFile() {
@@ -319,7 +320,6 @@
     });
   }
 
-  // Steps through CONTEXT_STEPS on each click
   function expandContext() {
     const scrollPos = elDiffPane.scrollTop;
     const idx = CONTEXT_STEPS.indexOf(state.contextSize);
@@ -331,7 +331,6 @@
     requestAnimationFrame(() => { elDiffPane.scrollTop = scrollPos; });
   }
 
-  // Fetches file contents and renders diff for the selected file
   async function selectFile(filename) {
     state.selectedFile = filename;
     state.contextSize = 3;
@@ -481,28 +480,58 @@
     return !!ch && WORD_CHAR_RE.test(ch);
   }
 
-  function uniquePhrasesPreservingOrder(phrases) {
-    const seen = new Set();
-    const out = [];
-    for (const p of phrases) {
-      if (seen.has(p)) continue;
-      seen.add(p);
-      out.push(p);
+  // Determine which pane the current selection sits in: "left", "right", or
+  // "both" (context lines in line-by-line, or no selection).
+  function detectSelectionSide() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return "both";
+    let node = sel.getRangeAt(0).startContainer;
+    if (node && node.nodeType !== 1) node = node.parentElement;
+    if (!node) return "both";
+
+    const sideEl = node.closest(".d2h-file-side-diff");
+    if (sideEl && sideEl.parentElement) {
+      const sides = sideEl.parentElement.querySelectorAll(":scope > .d2h-file-side-diff");
+      if (sides.length === 2) return sides[0] === sideEl ? "left" : "right";
     }
-    return out;
+    const codeCell = node.closest("td.d2h-code-line, td.d2h-code-side-line");
+    if (codeCell) {
+      if (codeCell.classList.contains("d2h-del")) return "left";
+      if (codeCell.classList.contains("d2h-ins")) return "right";
+    }
+    return "both";
   }
 
-  // Enforce word-boundary semantics so highlighting "abc" does not match
-  // inside "abcde". Boundaries are only required on a side where the phrase
-  // itself starts/ends with a word character; this mirrors regex \b behavior
-  // and lets phrases like "%1" or " foo " match naturally.
-  function wrapPhraseMatchesInMarks(phrase, colorIndex) {
+  // Resolve the set of `.d2h-code-line-ctn` elements a phrase may match
+  // against, scoped to the side it was added on.
+  function getHighlightContainers(side) {
+    if (side === "both") {
+      return Array.from(elDiffPane.querySelectorAll(".d2h-code-line-ctn"));
+    }
+    const containers = [];
+    if (elDiffPane.classList.contains("sbs-mode")) {
+      elDiffPane.querySelectorAll(".d2h-files-diff").forEach((files) => {
+        const sides = files.querySelectorAll(":scope > .d2h-file-side-diff");
+        if (sides.length !== 2) return;
+        const sideEl = side === "left" ? sides[0] : sides[1];
+        sideEl.querySelectorAll(".d2h-code-line-ctn").forEach((c) => containers.push(c));
+      });
+      return containers;
+    }
+    const cls = side === "left" ? "d2h-del" : "d2h-ins";
+    return Array.from(elDiffPane.querySelectorAll(`td.d2h-code-line.${cls} .d2h-code-line-ctn`));
+  }
+
+  // Word-boundary check is only applied on a side where the phrase itself
+  // starts/ends with a word char (mirrors regex \b), so phrases like "%1"
+  // or " foo " still match where the user explicitly chose those delimiters.
+  function wrapPhraseMatchesInMarks(phrase, colorIndex, side) {
     if (!phrase) return;
     const mod = colorIndex % HIGHLIGHT_COLOR_COUNT;
     const checkLeftBoundary = isWordChar(phrase[0]);
     const checkRightBoundary = isWordChar(phrase[phrase.length - 1]);
 
-    elDiffPane.querySelectorAll(".d2h-code-line-ctn").forEach((lineContainer) => {
+    for (const lineContainer of getHighlightContainers(side)) {
       const walker = document.createTreeWalker(lineContainer, NodeFilter.SHOW_TEXT);
       const textNodes = [];
       while (walker.nextNode()) textNodes.push(walker.currentNode);
@@ -542,22 +571,27 @@
           sliceStart = start + phrase.length;
         }
         fragment.appendChild(document.createTextNode(text.slice(sliceStart)));
-        textNode.parentNode.replaceChild(fragment, textNode);
+        textNode.replaceWith(fragment);
       }
-    });
+    }
   }
 
+  // Each entry is { phrase, side }. Color is keyed off the first entry that
+  // shares the same phrase, so adding the same phrase on both sides reads as
+  // one logical highlight in two scopes. Longest-first ordering prevents a
+  // shorter phrase from shadowing a longer one nested inside it.
   function applyHighlights() {
     clearHighlights();
-    if (!state.highlightPhrases.length) return;
-    const uniqueOrdered = uniquePhrasesPreservingOrder(state.highlightPhrases);
-    const phraseToColorIndex = new Map();
-    uniqueOrdered.forEach((p, i) => phraseToColorIndex.set(p, i));
-
-    const phrasesLongestFirst = uniqueOrdered.slice().sort((a, b) => b.length - a.length);
-    for (const phrase of phrasesLongestFirst) {
-      const colorIdx = phraseToColorIndex.get(phrase) ?? 0;
-      wrapPhraseMatchesInMarks(phrase, colorIdx);
+    const phrases = state.highlightPhrases;
+    if (!phrases.length) return;
+    const order = phrases
+      .map((entry) => ({
+        ...entry,
+        colorIndex: phrases.findIndex((e) => e.phrase === entry.phrase),
+      }))
+      .sort((a, b) => b.phrase.length - a.phrase.length);
+    for (const { phrase, side, colorIndex } of order) {
+      wrapPhraseMatchesInMarks(phrase, colorIndex, side);
     }
   }
 
@@ -594,6 +628,7 @@
     function hideHighlightMenu() { elHighlightMenu.style.display = "none"; }
 
     let pendingSelectedPhrase = "";
+    let pendingSelectedSide = "both";
 
     elDiffPane.addEventListener("contextmenu", (e) => {
       const selectedText = window.getSelection().toString().trim();
@@ -603,6 +638,13 @@
 
       e.preventDefault();
       pendingSelectedPhrase = selectedText;
+      pendingSelectedSide = hasTextSelection ? detectSelectionSide() : "both";
+
+      const sideSuffix =
+        pendingSelectedSide === "left" ? " (left pane)"
+        : pendingSelectedSide === "right" ? " (right pane)"
+        : "";
+      elMenuAddPhrase.lastChild.nodeValue = "Add highlight" + sideSuffix;
 
       elMenuAddPhrase.style.display = hasTextSelection ? "" : "none";
       elMenuClearAll.style.display = hasActiveHighlights ? "" : "none";
@@ -617,17 +659,15 @@
     elMenuAddPhrase.addEventListener("click", () => {
       hideHighlightMenu();
       if (!pendingSelectedPhrase) return;
-      if (!state.highlightPhrases.includes(pendingSelectedPhrase)) {
-        state.highlightPhrases.push(pendingSelectedPhrase);
-      }
+      const phrase = pendingSelectedPhrase;
+      const side = pendingSelectedSide;
+      const exists = state.highlightPhrases.some((e) => e.phrase === phrase && e.side === side);
+      if (!exists) state.highlightPhrases.push({ phrase, side });
       applyHighlights();
-      const uniquePhraseCount = uniquePhrasesPreservingOrder(state.highlightPhrases).length;
+      const phraseCount = state.highlightPhrases.length;
       const matchCount = elDiffPane.querySelectorAll(".diff-highlight").length;
-      const phrasePreviewForStatus =
-        pendingSelectedPhrase.length > 30
-          ? pendingSelectedPhrase.slice(0, 27) + "…"
-          : pendingSelectedPhrase;
-      setStatus(`${uniquePhraseCount} phrase(s), ${matchCount} occurrence(s) — added "${phrasePreviewForStatus}"`);
+      const phrasePreview = phrase.length > 30 ? phrase.slice(0, 27) + "…" : phrase;
+      setStatus(`${phraseCount} phrase(s), ${matchCount} occurrence(s) — added "${phrasePreview}"`);
     });
 
     elMenuClearAll.addEventListener("click", () => {
@@ -679,5 +719,28 @@
   makeDraggable(elSplitter, (e) => {
     elSidebar.style.width = Math.max(100, Math.min(e.clientX, window.innerWidth - 200)) + "px";
   });
+
+  // ── Sidebar collapse / expand ───────────────────────────
+  let lastSidebarWidth = "";
+
+  function setSidebarCollapsed(collapsed) {
+    if (collapsed) {
+      lastSidebarWidth = elSidebar.style.width || "";
+      elSidebar.classList.add("collapsed");
+      elBtnSidebarCollapse.setAttribute("aria-expanded", "false");
+      elBtnSidebarExpand.hidden = false;
+      elBtnSidebarExpand.setAttribute("aria-expanded", "false");
+    } else {
+      elSidebar.classList.remove("collapsed");
+      if (lastSidebarWidth) elSidebar.style.width = lastSidebarWidth;
+      elBtnSidebarCollapse.setAttribute("aria-expanded", "true");
+      elBtnSidebarExpand.hidden = true;
+      elBtnSidebarExpand.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  elBtnSidebarCollapse.addEventListener("click", () => setSidebarCollapsed(true));
+  elBtnSidebarExpand.addEventListener("click", () => setSidebarCollapsed(false));
+
   setupHighlightContextMenu();
 })();
