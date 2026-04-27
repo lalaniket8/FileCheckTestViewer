@@ -475,6 +475,11 @@
 
   // ── Diff highlights (text search + <mark> injection) ──
   const HIGHLIGHT_COLOR_COUNT = 8;
+  const WORD_CHAR_RE = /[A-Za-z0-9_]/;
+
+  function isWordChar(ch) {
+    return !!ch && WORD_CHAR_RE.test(ch);
+  }
 
   function uniquePhrasesPreservingOrder(phrases) {
     const seen = new Set();
@@ -487,8 +492,16 @@
     return out;
   }
 
+  // Enforce word-boundary semantics so highlighting "abc" does not match
+  // inside "abcde". Boundaries are only required on a side where the phrase
+  // itself starts/ends with a word character; this mirrors regex \b behavior
+  // and lets phrases like "%1" or " foo " match naturally.
   function wrapPhraseMatchesInMarks(phrase, colorIndex) {
+    if (!phrase) return;
     const mod = colorIndex % HIGHLIGHT_COLOR_COUNT;
+    const checkLeftBoundary = isWordChar(phrase[0]);
+    const checkRightBoundary = isWordChar(phrase[phrase.length - 1]);
+
     elDiffPane.querySelectorAll(".d2h-code-line-ctn").forEach((lineContainer) => {
       const walker = document.createTreeWalker(lineContainer, NodeFilter.SHOW_TEXT);
       const textNodes = [];
@@ -498,18 +511,35 @@
         const text = textNode.nodeValue;
         if (text.indexOf(phrase) === -1) continue;
 
+        const matchStarts = [];
+        let searchFrom = 0;
+        let matchIndex;
+        while ((matchIndex = text.indexOf(phrase, searchFrom)) !== -1) {
+          const matchEnd = matchIndex + phrase.length;
+          const prevChar = matchIndex > 0 ? text[matchIndex - 1] : "";
+          const nextChar = matchEnd < text.length ? text[matchEnd] : "";
+          const leftOk = !checkLeftBoundary || !isWordChar(prevChar);
+          const rightOk = !checkRightBoundary || !isWordChar(nextChar);
+          if (leftOk && rightOk) {
+            matchStarts.push(matchIndex);
+            searchFrom = matchEnd;
+          } else {
+            searchFrom = matchIndex + 1;
+          }
+        }
+        if (!matchStarts.length) continue;
+
         const fragment = document.createDocumentFragment();
         let sliceStart = 0;
-        let matchIndex;
-        while ((matchIndex = text.indexOf(phrase, sliceStart)) !== -1) {
-          if (matchIndex > sliceStart) {
-            fragment.appendChild(document.createTextNode(text.slice(sliceStart, matchIndex)));
+        for (const start of matchStarts) {
+          if (start > sliceStart) {
+            fragment.appendChild(document.createTextNode(text.slice(sliceStart, start)));
           }
           const mark = document.createElement("mark");
           mark.className = "diff-highlight diff-highlight--" + mod;
           mark.textContent = phrase;
           fragment.appendChild(mark);
-          sliceStart = matchIndex + phrase.length;
+          sliceStart = start + phrase.length;
         }
         fragment.appendChild(document.createTextNode(text.slice(sliceStart)));
         textNode.parentNode.replaceChild(fragment, textNode);
